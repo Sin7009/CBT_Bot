@@ -47,7 +47,7 @@ class CBTAgent:
                 ]
             )
 
-            if critique.adherence_to_protocol and critique.is_safe:
+            if critique.adherence_to_protocol and critique.is_safe and critique.correct_level_identification:
                 return draft.content
 
             internal_log.append(critique.feedback)
