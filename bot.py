@@ -13,7 +13,7 @@ OPENAI_KEY = os.getenv("OPENAI_API_KEY") # Или OpenRouter
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # Модели (можно менять на GPT-4o / Claude 3.5 Sonnet через OpenRouter)
-MODEL_THERAPIST = os.getenv("MODEL_THERAPIST", "google/gemini-3-pro-preview")
+MODEL_THERAPIST = os.getenv("MODEL_THERAPIST", "google/gemini-2.5-flash")
 MODEL_SUPERVISOR = os.getenv("MODEL_SUPERVISOR", "deepseek/deepseek-v3.2-speciale")
 
 bot = Bot(token=TOKEN)
