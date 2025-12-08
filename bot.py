@@ -1,4 +1,3 @@
-import os
 import asyncio
 import json
 from aiogram import Bot, Dispatcher, types
@@ -6,20 +5,17 @@ from aiogram.filters import Command
 from redis.asyncio import Redis
 
 from src.agent import CBTAgent
+from src.config import settings
 
-# Конфиг из переменных окружения
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENAI_KEY = os.getenv("OPENAI_API_KEY") # Или OpenRouter
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
-# Модели (можно менять на GPT-4o / Claude 3.5 Sonnet через OpenRouter)
-MODEL_THERAPIST = os.getenv("MODEL_THERAPIST", "google/gemini-2.5-flash")
-MODEL_SUPERVISOR = os.getenv("MODEL_SUPERVISOR", "deepseek/deepseek-v3.2-speciale")
-
-bot = Bot(token=TOKEN)
+bot = Bot(token=settings.TELEGRAM_TOKEN)
 dp = Dispatcher()
-redis = Redis.from_url(REDIS_URL, decode_responses=True)
-agent = CBTAgent(OPENAI_KEY, MODEL_THERAPIST, MODEL_SUPERVISOR)
+redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+agent = CBTAgent(
+    settings.OPENAI_API_KEY,
+    settings.MODEL_THERAPIST,
+    settings.MODEL_SUPERVISOR,
+    base_url=settings.OPENAI_BASE_URL
+)
 
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
@@ -43,9 +39,16 @@ async def chat(message: types.Message):
         history = []
 
     status_msg = await message.answer("Thinking... (Neuro-symbolic validation)")
+    await bot.send_chat_action(chat_id=user_id, action="typing")
+
+    async def update_status(text: str):
+        try:
+            await status_msg.edit_text(text)
+        except Exception:
+            pass # Ignore edit errors (e.g. same text)
 
     try:
-        response = await agent.run(user_text, history)
+        response = await agent.run(user_text, history, on_status_update=update_status)
 
         # Обновляем историю
         try:
@@ -57,7 +60,9 @@ async def chat(message: types.Message):
 
         await status_msg.edit_text(response)
     except Exception as e:
-        await status_msg.edit_text(f"Error: {str(e)}")
+        import logging
+        logging.error(f"Internal error processing message: {e}", exc_info=True)
+        await status_msg.edit_text("Произошла внутренняя ошибка. Мы уже работаем над этим. Попробуйте нажать /start.")
 
 async def main():
     await dp.start_polling(bot)
