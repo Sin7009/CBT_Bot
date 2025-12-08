@@ -2,6 +2,7 @@ aiogram==3.10.0
 openai==1.35.0
 instructor==1.3.0
 pydantic==2.8.0
+pydantic-settings
 redis==5.0.0
 pytest
 pytest-asyncio
