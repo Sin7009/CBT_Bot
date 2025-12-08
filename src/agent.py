@@ -2,12 +2,18 @@ import asyncio
 from typing import Callable, Optional
 from openai import AsyncOpenAI
 import instructor
+
+from instructor import Mode
+
 from .schemas import PatientState, TherapistDraft, SupervisorCritique
 from .prompts import THERAPIST_SYSTEM_PROMPT, SUPERVISOR_SYSTEM_PROMPT
 
 class CBTAgent:
     def __init__(self, api_key: str, model_therapist: str, model_supervisor: str, base_url: str = None):
-        self.client = instructor.from_openai(AsyncOpenAI(api_key=api_key, base_url=base_url))
+        self.client = instructor.from_openai(
+            AsyncOpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1"),
+            mode=Mode.JSON
+        )
         self.model_therapist = model_therapist
         self.model_supervisor = model_supervisor
 
