@@ -62,6 +62,22 @@ cp .env.example .env
     python bot.py
     ```
 
+## Development & Testing
+
+To run the test suite (which verifies the agent's logic, safety checks, and edge-case handling):
+
+1.  **Install test dependencies:** (Included in `requirements.txt`)
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2.  **Run tests using pytest:**
+    ```bash
+    # Set PYTHONPATH to include the current directory
+    export PYTHONPATH=$PYTHONPATH:.
+    python -m pytest tests/
+    ```
+
 ## Architecture Details
 
 The bot uses `aiogram` for Telegram interactions and `instructor` for structured LLM outputs.
