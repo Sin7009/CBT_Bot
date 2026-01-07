@@ -1,16 +1,12 @@
 import pytest
+import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from src.agent import CBTAgent
 
 # Explanation:
-# This test targets a "Type Consistency" failure in `CBTAgent.run`.
-# The method signature defines `on_status_update` as `Optional[Callable[[str], None]]`.
-# This type hint implies a synchronous function (one that returns None, not Awaitable[None]).
-# However, the implementation uses `await on_status_update(...)`.
-# If a developer (or another part of the system) passes a regular synchronous function matching the type hint,
-# the `await` expression will raise a `TypeError` because the result is `None` (not awaitable),
-# causing the agent to crash unexpectedly.
-# This represents a contract violation where the implementation demands stricter types than the interface declares.
+# This test verifies the fix for "Type Consistency" in `CBTAgent.run`.
+# Previously, passing a synchronous function crashed because `await` was used on `None`.
+# The fix ensures both sync and async callbacks work correctly.
 
 @pytest.fixture
 def mock_client():
@@ -20,15 +16,11 @@ def mock_client():
     mock_response = MagicMock()
     mock_response.safety_risk = False
     mock_response.content = "Draft content"
-
-    # We need to support multiple calls:
-    # 1. Supervisor Analysis -> returns state with safety_risk=False
-    # 2. Therapist Draft -> returns draft
-    # 3. Supervisor Critique -> returns critique
+    mock_response.adherence_to_protocol = True
+    mock_response.is_safe = True
+    mock_response.correct_level_identification = True
 
     async def side_effect(*args, **kwargs):
-        # Determine what kind of model is being called or just return generic mocks
-        # For this test, we just need it to not crash on API calls
         return mock_response
 
     client.chat.completions.create = AsyncMock(side_effect=side_effect)
@@ -41,18 +33,35 @@ def agent(mock_client):
     return agent
 
 @pytest.mark.asyncio
-async def test_run_with_synchronous_callback_crash(agent):
+async def test_run_with_synchronous_callback_success(agent):
     """
-    Test that passing a synchronous function as `on_status_update` causes a TypeError.
-    The implementation awaits the callback result, so a sync function returning None
-    will cause `await None`, raising TypeError.
+    Test that passing a synchronous function as `on_status_update` works correctly.
     """
+    callback_mock = MagicMock()
 
-    # A synchronous callback function (matches Callable[[str], None])
     def sync_callback(status: str):
-        pass
+        callback_mock(status)
 
-    # We expect this to crash with TypeError: object NoneType can't be used in 'await' expression
-    # or similar message depending on python version
-    with pytest.raises(TypeError):
-        await agent.run(user_message="Hello", history=[], on_status_update=sync_callback)
+    # Should not raise TypeError
+    await agent.run(user_message="Hello", history=[], on_status_update=sync_callback)
+
+    # Verify callback was called at least once (e.g. "Анализирую мысли...")
+    assert callback_mock.call_count >= 1
+    callback_mock.assert_any_call("Анализирую мысли...")
+
+@pytest.mark.asyncio
+async def test_run_with_asynchronous_callback_success(agent):
+    """
+    Test that passing an asynchronous function as `on_status_update` works correctly.
+    """
+    callback_mock = AsyncMock()
+
+    async def async_callback(status: str):
+        await callback_mock(status)
+
+    # Should not raise TypeError
+    await agent.run(user_message="Hello", history=[], on_status_update=async_callback)
+
+    # Verify callback was called at least once
+    assert callback_mock.call_count >= 1
+    callback_mock.assert_any_call("Анализирую мысли...")
