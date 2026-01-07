@@ -36,7 +36,15 @@ class CBTAgent:
             return "Я ИИ-ассистент и не могу помочь в кризисной ситуации. Пожалуйста, позвоните в скорую (103) или телефон доверия."
 
         # 2. ЦИКЛ ГЕНЕРАЦИИ (Grounding Loop)
-        messages = [{"role": "system", "content": THERAPIST_SYSTEM_PROMPT}] + history + [{"role": "user", "content": user_message}]
+        # Validate history elements
+        valid_history = []
+        for msg in history:
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                valid_history.append(msg)
+            else:
+                print(f"⚠️ Warning: Dropping invalid history item: {msg}")
+
+        messages = [{"role": "system", "content": THERAPIST_SYSTEM_PROMPT}] + valid_history + [{"role": "user", "content": user_message}]
         last_draft = None
         last_critique = None
 
