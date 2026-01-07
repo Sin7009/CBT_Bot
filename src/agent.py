@@ -1,5 +1,6 @@
 import asyncio
-from typing import Callable, Optional
+import inspect
+from typing import Callable, Optional, Awaitable, Union
 from openai import AsyncOpenAI
 import instructor
 
@@ -17,10 +18,15 @@ class CBTAgent:
         self.model_therapist = model_therapist
         self.model_supervisor = model_supervisor
 
-    async def run(self, user_message: str, history: list, on_status_update: Optional[Callable[[str], None]] = None) -> str:
+    async def _safe_callback(self, callback: Optional[Callable[[str], Union[None, Awaitable[None]]]], message: str):
+        if callback:
+            result = callback(message)
+            if inspect.isawaitable(result):
+                await result
+
+    async def run(self, user_message: str, history: list, on_status_update: Optional[Callable[[str], Union[None, Awaitable[None]]]] = None) -> str:
         # 1. АНАЛИЗ СОСТОЯНИЯ (Левое полушарие)
-        if on_status_update:
-            await on_status_update("Анализирую мысли...")
+        await self._safe_callback(on_status_update, "Анализирую мысли...")
 
         state = await self.client.chat.completions.create(
             model=self.model_supervisor,
@@ -41,8 +47,7 @@ class CBTAgent:
         last_critique = None
 
         for i in range(3): # Максимум 3 попытки
-            if on_status_update:
-                await on_status_update(f"Формулирую ответ (попытка {i+1})...")
+            await self._safe_callback(on_status_update, f"Формулирую ответ (попытка {i+1})...")
 
             # Подготовка контекста ретрая
             current_messages = list(messages)
@@ -65,8 +70,7 @@ class CBTAgent:
             )
 
             # Критика
-            if on_status_update:
-                await on_status_update("Консультируюсь с супервизором...")
+            await self._safe_callback(on_status_update, "Консультируюсь с супервизором...")
 
             critique = await self.client.chat.completions.create(
                 model=self.model_supervisor,
