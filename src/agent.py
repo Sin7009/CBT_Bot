@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 from typing import Callable, Optional, Awaitable, Union
+from datetime import datetime
 from openai import AsyncOpenAI
 import instructor
 
@@ -8,15 +9,17 @@ from instructor import Mode
 
 from .schemas import PatientState, TherapistDraft, SupervisorCritique
 from .prompts import THERAPIST_SYSTEM_PROMPT, SUPERVISOR_SYSTEM_PROMPT
+from .memory_manager import MemoryManager, MemoryEntry
 
 class CBTAgent:
-    def __init__(self, api_key: str, model_therapist: str, model_supervisor: str, base_url: str = None):
+    def __init__(self, api_key: str, model_therapist: str, model_supervisor: str, base_url: str = None, memory_manager: Optional[MemoryManager] = None):
         self.client = instructor.from_openai(
             AsyncOpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1"),
             mode=Mode.JSON
         )
         self.model_therapist = model_therapist
         self.model_supervisor = model_supervisor
+        self.memory_manager = memory_manager
 
     async def _safe_callback(self, callback: Optional[Callable[[str], Union[None, Awaitable[None]]]], message: str):
         if callback:
@@ -24,7 +27,7 @@ class CBTAgent:
             if inspect.isawaitable(result):
                 await result
 
-    async def run(self, user_message: str, history: list, on_status_update: Optional[Callable[[str], Union[None, Awaitable[None]]]] = None) -> str:
+    async def run(self, user_message: str, history: list, on_status_update: Optional[Callable[[str], Union[None, Awaitable[None]]]] = None, user_id: Optional[str] = None) -> str:
         # 1. АНАЛИЗ СОСТОЯНИЯ (Левое полушарие)
         await self._safe_callback(on_status_update, "Анализирую мысли...")
 
@@ -39,7 +42,11 @@ class CBTAgent:
 
         # SAFETY VALVE (Предохранитель)
         if state.safety_risk:
-            return "Я ИИ-ассистент и не могу помочь в кризисной ситуации. Пожалуйста, позвоните в скорую (103) или телефон доверия."
+            response = "Я ИИ-ассистент и не могу помочь в кризисной ситуации. Пожалуйста, позвоните в скорую (103) или телефон доверия."
+            # Save to memory if enabled
+            if self.memory_manager and user_id:
+                await self._save_to_memory(user_id, user_message, response, state, None, None)
+            return response
 
         # 2. ЦИКЛ ГЕНЕРАЦИИ (Grounding Loop)
         # Validate history elements
@@ -90,10 +97,47 @@ class CBTAgent:
             )
 
             if critique.adherence_to_protocol and critique.is_safe and critique.correct_level_identification:
+                # Save successful interaction to memory
+                if self.memory_manager and user_id:
+                    await self._save_to_memory(user_id, user_message, draft.content, state, draft, critique)
                 return draft.content
 
             last_draft = draft
             last_critique = critique
             print(f"⚠️ Попытка {i+1} отклонена: {critique.feedback}")
 
-        return "Извини, я затрудняюсь сформулировать терапевтический ответ прямо сейчас. Попробуй перефразировать."
+        # Fallback response
+        response = "Извини, я затрудняюсь сформулировать терапевтический ответ прямо сейчас. Попробуй перефразировать."
+        # Save fallback to memory if enabled
+        if self.memory_manager and user_id:
+            await self._save_to_memory(user_id, user_message, response, state, None, None)
+        return response
+    
+    async def _save_to_memory(self, user_id: str, user_message: str, agent_response: str, 
+                             state: PatientState, draft: Optional[TherapistDraft], 
+                             critique: Optional[SupervisorCritique]) -> None:
+        """Save interaction to memory storage."""
+        try:
+            entry = MemoryEntry(
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                user_id=user_id,
+                user_message=user_message,
+                agent_response=agent_response,
+                emotion=state.current_emotion,
+                intensity=state.intensity,
+                thought_level=state.thought_level.value if state.thought_level else None,
+                primary_distortion=state.primary_distortion.value if state.primary_distortion else None,
+                technique_used=draft.technique_used if draft else None,
+                analysis={
+                    "emotion": state.current_emotion,
+                    "intensity": state.intensity,
+                    "thought_level": state.thought_level.value if state.thought_level else None,
+                    "primary_distortion": state.primary_distortion.value if state.primary_distortion else None,
+                    "safety_risk": state.safety_risk,
+                    "technique_used": draft.technique_used if draft else None,
+                    "critique_feedback": critique.feedback if critique else None
+                }
+            )
+            await self.memory_manager.save_memory(entry)
+        except Exception as e:
+            print(f"⚠️ Error saving to memory: {e}")

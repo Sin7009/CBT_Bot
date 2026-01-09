@@ -12,6 +12,7 @@ A Telegram bot implementing a Cognitive Behavioral Therapy (CBT) agent using a n
 *   **State Analysis:** Analyzes patient state (Automatic Thoughts, Intermediate Beliefs, Core Beliefs) before responding.
 *   **Telegram Interface:** Real-time status updates ("Thinking...", "Consulting supervisor...") and typing indicators.
 *   **Redis History:** Maintains conversation context (last 10 messages) for continuity.
+*   **Markdown Memory Storage:** Persistent storage of therapeutic sessions in human-readable markdown files with rich metadata (see [MEMORY_SYSTEM.md](MEMORY_SYSTEM.md)).
 
 ## Prerequisites
 
@@ -34,6 +35,8 @@ cp .env.example .env
 | `REDIS_URL` | Redis connection string. | `redis://redis:6379/0` |
 | `MODEL_THERAPIST` | Model for generation. | `google/gemini-2.5-flash` |
 | `MODEL_SUPERVISOR` | Model for validation. | `deepseek/deepseek-v3.2-speciale` |
+| `MEMORY_DIR` | Directory for memory storage. | `agent_memory` |
+| `USE_MEMORY_STORAGE` | Enable markdown memory storage. | `true` |
 
 > **Note on Models:** The default models (`gemini-2.5-flash` and `deepseek-v3.2-speciale`) are configured in the code. Ensure these models are available via your OpenRouter provider, or override them in your `.env` file with available alternatives (e.g., `google/gemini-pro`, `deepseek/deepseek-chat`).
 

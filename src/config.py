@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     MODEL_THERAPIST: str = "google/gemini-2.5-flash"
     MODEL_SUPERVISOR: str = "deepseek/deepseek-v3.2-speciale"
 
+    # Memory storage
+    MEMORY_DIR: str = "agent_memory"
+    USE_MEMORY_STORAGE: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
